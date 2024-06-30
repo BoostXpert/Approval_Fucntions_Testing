@@ -1,152 +1,73 @@
-from flask import Flask, request, render_template_string
-import firebase_admin
-from firebase_admin import credentials, db
+from flask import Flask, render_template, redirect, url_for
+from flask_caching import Cache
+import pyrebase
 import time
-import os
+import uuid
 
 app = Flask(__name__)
+cache = Cache(app, config={'CACHE_TYPE': 'simple'})
 
 # Firebase configuration
 firebase_config = {
-  "type": "service_account",
-  "project_id": "boostxpert",
-  "private_key_id": "a41c18d97e8f8d110232a25c08b6f84df6bb6b41",
-  "private_key": os.getenv("FIREBASE_PRIVATE_KEY").replace('\\n', '\n'),
-  "client_email": "firebase-adminsdk-qfovh@boostxpert.iam.gserviceaccount.com",
-  "client_id": "111744002932529453456",
-  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
-  "token_uri": "https://oauth2.googleapis.com/token",
-  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-qfovh%40boostxpert.iam.gserviceaccount.com"
+    "apiKey": "AIzaSyDzQSE0-7oI7WfSak1xsnPEXdFxZJt_Bnc",
+    "authDomain": "your-auth-domain",
+    "databaseURL": "https://boostxpert-default-rtdb.firebaseio.com/",
+    "storageBucket": "your-storage-bucket",
 }
 
-cred = credentials.Certificate(firebase_config)
-firebase_admin.initialize_app(cred, {
-    'databaseURL': 'https://boostxpert-default-rtdb.firebaseio.com/'
-})
+firebase = pyrebase.initialize_app(firebase_config)
+db = firebase.database()
 
-approve_html = '''
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Job Approval</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #f4f4f9;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            flex-direction: column;
-        }
-        .container {
-            background-color: white;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-            width: 90%;
-            max-width: 800px;
-            padding: 20px;
-            text-align: center;
-        }
-        h1 {
-            margin-bottom: 20px;
-        }
-        embed {
-            width: 100%;
-            height: 500px;
-            border: none;
-            margin-bottom: 20px;
-        }
-        .buttons {
-            display: flex;
-            justify-content: space-between;
-        }
-        button {
-            padding: 10px 20px;
-            border: none;
-            border-radius: 5px;
-            font-size: 16px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        .approve {
-            background-color: #4CAF50;
-            color: white;
-        }
-        .approve:hover {
-            background-color: #45a049;
-        }
-        .reject {
-            background-color: #f44336;
-            color: white;
-        }
-        .reject:hover {
-            background-color: #e53935;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Job Details for {{ job_name }}</h1>
-        <embed src="{{ pdf_url }}" type="application/pdf" />
-        <div class="buttons">
-            <form action="/process_approval" method="post" style="display: inline;">
-                <input type="hidden" name="unique_id" value="{{ unique_id }}">
-                <button type="submit" name="action" value="approve" class="approve">Approve</button>
-            </form>
-            <form action="/process_approval" method="post" style="display: inline;">
-                <input type="hidden" name="unique_id" value="{{ unique_id }}">
-                <button type="submit" name="action" value="reject" class="reject">Reject</button>
-            </form>
-        </div>
-    </div>
-</body>
-</html>
-'''
+# In-memory store for tracking link usage
+link_store = {}
 
-@app.route('/approve')
-def approve():
-    unique_id = request.args.get('unique_id')
-    ref = db.reference(f'firebase-testing1/{unique_id}')
-    job_data = ref.get()
+@app.route('/pdf/<token>')
+def pdf_view(token):
+    if token in link_store:
+        # Check if the link has already been used or expired
+        link_info = link_store[token]
+        if link_info['used'] or time.time() - link_info['created_at'] > 180:
+            return "Link has expired or already used.", 403
 
-    if not job_data:
-        return "Invalid or expired link."
+        return render_template('pdf_view.html', token=token)
 
-    if job_data.get('is_used', False):
-        return "This link has already been used."
+    return "Invalid link.", 404
 
-    current_timestamp = int(time.time() * 1000)
-    link_timestamp = job_data.get('timestamp', 0)
-    expiration_time = 3 * 60 * 1000
+@app.route('/approve/<token>')
+def approve(token):
+    return update_status(token, "approved")
 
-    if current_timestamp - link_timestamp > expiration_time:
-        return "This link has expired."
+@app.route('/reject/<token>')
+def reject(token):
+    return update_status(token, "rejected")
 
-    ref.update({'is_used': True})
+def update_status(token, status):
+    if token in link_store:
+        link_info = link_store[token]
+        if link_info['used'] or time.time() - link_info['created_at'] > 180:
+            return "Link has expired or already used.", 403
 
-    return render_template_string(approve_html, job_name=job_data['job_name'], pdf_url='https://drive.google.com/uc?export=download&id=0B6fdYjTkgBWWc3RhcnRlcl9maWxl', unique_id=unique_id)
+        # Update the status in Firebase
+        db.child("approvals").child(token).update({"status": status})
 
-@app.route('/process_approval', methods=['POST'])
-def process_approval():
-    unique_id = request.form['unique_id']
-    action = request.form['action']
-    update_document_status(unique_id, action)
-    return "Thank you! Your response has been recorded."
+        # Mark the link as used
+        link_info['used'] = True
+        return f"Status updated to {status}.", 200
 
-def update_document_status(unique_id, action):
-    ref = db.reference(f'firebase-testing1/{unique_id}')
-    if action == 'approve':
-        ref.update({'approval_status': True})
-    elif action == 'reject':
-        ref.update({'approval_status': False})
-    ref.update({'is_used': True})
+    return "Invalid link.", 404
+
+def generate_link():
+    token = str(uuid.uuid4())
+    link_store[token] = {"used": False, "created_at": time.time()}
+    return f"/pdf/{token}"
+
+# Example route to create a new PDF link
+@app.route('/create_link')
+def create_link():
+    pdf_link = generate_link()
+    # You would normally return this link in a more secure way
+    return f"Generated link: {pdf_link}"
 
 if __name__ == '__main__':
     app.run(debug=True)
-  
+
