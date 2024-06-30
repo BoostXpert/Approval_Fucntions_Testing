@@ -3,6 +3,7 @@ from flask_caching import Cache
 import pyrebase
 import time
 import uuid
+import urllib3
 
 app = Flask(__name__)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
