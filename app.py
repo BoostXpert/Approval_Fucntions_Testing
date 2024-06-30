@@ -2,7 +2,6 @@ from flask import Flask, request, render_template_string
 import firebase_admin
 from firebase_admin import credentials, db
 import time
-import json
 import os
 
 app = Flask(__name__)
@@ -18,8 +17,7 @@ firebase_config = {
   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
   "token_uri": "https://oauth2.googleapis.com/token",
   "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
-  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-qfovh%40boostxpert.iam.gserviceaccount.com",
-  "universe_domain": "googleapis.com"
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/firebase-adminsdk-qfovh%40boostxpert.iam.gserviceaccount.com"
 }
 
 cred = credentials.Certificate(firebase_config)
@@ -53,20 +51,20 @@ approve_html = '''
             width: 90%;
             max-width: 800px;
             padding: 20px;
-            text-align: center.
+            text-align: center;
         }
         h1 {
-            margin-bottom: 20px.
+            margin-bottom: 20px;
         }
         embed {
             width: 100%;
             height: 500px;
             border: none;
-            margin-bottom: 20px.
+            margin-bottom: 20px;
         }
         .buttons {
             display: flex;
-            justify-content: space-between.
+            justify-content: space-between;
         }
         button {
             padding: 10px 20px;
@@ -74,21 +72,21 @@ approve_html = '''
             border-radius: 5px;
             font-size: 16px;
             cursor: pointer;
-            transition: background-color 0.3s.
+            transition: background-color 0.3s;
         }
         .approve {
             background-color: #4CAF50;
-            color: white.
+            color: white;
         }
         .approve:hover {
-            background-color: #45a049.
+            background-color: #45a049;
         }
         .reject {
             background-color: #f44336;
-            color: white.
+            color: white;
         }
         .reject:hover {
-            background-color: #e53935.
+            background-color: #e53935;
         }
     </style>
 </head>
@@ -151,3 +149,4 @@ def update_document_status(unique_id, action):
 
 if __name__ == '__main__':
     app.run(debug=True)
+  
