@@ -1,5 +1,6 @@
 from flask import Flask, render_template, redirect, url_for
 from flask_caching import Cache
+from collections.abc import MutableMapping
 import pyrebase
 import time
 import uuid
