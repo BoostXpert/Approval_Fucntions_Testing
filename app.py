@@ -1,10 +1,8 @@
 from flask import Flask, render_template, redirect, url_for
 from flask_caching import Cache
-from collections.abc import MutableMapping
 import pyrebase
 import time
 import uuid
-import urllib3
 
 app = Flask(__name__)
 cache = Cache(app, config={'CACHE_TYPE': 'simple'})
@@ -72,4 +70,3 @@ def create_link():
 
 if __name__ == '__main__':
     app.run(debug=True)
-
